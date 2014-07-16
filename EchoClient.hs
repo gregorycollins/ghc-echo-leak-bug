@@ -10,11 +10,19 @@ import           Control.Concurrent
 import qualified Control.Exception         as E
 import           Control.Monad             (replicateM, void)
 import           Data.ByteString.Char8     ()
-import           Data.IORef                (IORef, atomicModifyIORef', newIORef,
+import           Data.IORef                (IORef, atomicModifyIORef, newIORef,
                                             readIORef)
 import           Network.Socket
 import qualified Network.Socket.ByteString as N
 import           System.Environment        (getArgs)
+
+atomicModifyIORef' :: IORef a -> (a -> (a,b)) -> IO b
+atomicModifyIORef' ref f = do
+    b <- atomicModifyIORef ref
+            (\x -> let (a, b) = f x
+                    in (a, a `seq` b))
+    b `seq` return b
+
 
 main :: IO ()
 main = do
@@ -29,30 +37,37 @@ main = do
             clients <- replicateM spawnCount spawnClient
             return (w_tid, clients)
 
-        end (t, xs) = eatExceptions (killThread t) >> mapM_ killClient xs
+        end (t, xs) = E.mask_ $ do
+            eatExceptions (killThread t)
+            mapM_ killClient xs
+            mapM_ waitClient xs
 
         wait = mapM_ waitClient . snd
 
-        spawnClient = E.mask $ \restore -> do
+        spawnClient = E.mask_ $ do
             mv <- newEmptyMVar
-            tid <- restore (echoClient ip port pingFreq countRef) `forkFinally` const (putMVar mv ())
+            tid <- forkIOWithUnmask (\rest -> rest (echoClient ip port pingFreq countRef) `E.finally` putMVar mv ())
             return (tid, mv)
 
         killClient = eatExceptions . killThread . fst
 
-        waitClient = takeMVar . snd
+        waitClient = readMVar . snd
 
         eatExceptions m = m `E.catch` \(_ :: E.SomeException) -> return ()
 
 
 echoClient :: String -> Int -> Float -> IORef Int -> IO ()
-echoClient host port pingFreq count = do
-    sock <- socket AF_INET Stream defaultProtocol
-    (ainfo:_) <- getAddrInfo hints (Just host) (Just $ show port)
-    let addr = addrAddress ainfo
-    connect sock addr
-    incRef count
-    E.finally (loop sock) (decRef count)
+echoClient host port pingFreq count =
+    E.bracket (socket AF_INET Stream defaultProtocol)
+              (\sock -> do shutdown sock ShutdownBoth
+                           sClose sock
+                           decRef count)
+              (\sock -> do
+                  (ainfo:_) <- getAddrInfo hints (Just host) (Just $ show port)
+                  let addr = addrAddress ainfo
+                  connect sock addr
+                  incRef count
+                  loop sock)
   where
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICSERV]}
     loop sock = let go = do N.sendAll sock "PING\n"

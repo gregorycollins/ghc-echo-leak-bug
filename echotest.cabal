@@ -14,8 +14,8 @@ executable echoserver
   main-is:              EchoServer.hs
 
   build-depends:
-      base                  >= 4.6      && <4.8
-    , bytestring            >= 0.10
+      base                  >= 4.5      && <4.8
+    , bytestring            >= 0.9
     , network               >= 2.4
   ghc-options: -O2 -Wall -threaded -rtsopts
 
@@ -24,7 +24,7 @@ executable echoclient
   main-is:              EchoClient.hs
 
   build-depends:
-      base                  >= 4.6      && <4.8
-    , bytestring            >= 0.10
+      base                  >= 4.5      && <4.8
+    , bytestring            >= 0.9
     , network               >= 2.4
   ghc-options: -Wall -threaded -rtsopts
