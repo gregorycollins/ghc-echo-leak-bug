@@ -71,19 +71,23 @@ echoClient host port pingFreq count =
                   let addr = addrAddress ainfo
                   connect sock addr
                   incRef count
-                  loop sock)
+                  go sock)
   where
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICSERV]}
-    loop sock = let go = do N.sendAll sock "PING\n"
-                            _ <- N.recv sock 128
-                            threadDelay (round $ pingFreq*1000000)
-                            go
-                in go
+    {-# NOINLINE go #-}
+    go sock = loop
+      where
+        {-# NOINLINE loop #-}
+        loop = do N.sendAll sock "PING\n"
+                  _ <- N.recv sock 128
+                  threadDelay (round $ pingFreq*1000000)
+                  loop
 
 
 watcher :: IORef Int -> IO ()
 watcher i = go
   where
+    {-# NOINLINE go #-}
     go = do
         count <- readIORef i
         putStrLn $ "Clients Connected: " ++ (show count)

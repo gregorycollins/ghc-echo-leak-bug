@@ -38,11 +38,13 @@ main = withSocketsDo $ do
                       bind sock addr
                       listen sock 2048
                       printf "Listening on port %d\n" port
-                      let loop = do
-                                    (csock, _) <- accept sock
-                                    forkIOWithUnmask (\r -> r (echo csock) `E.finally` sClose csock)
-                                    loop
-                      loop)
+                      go sock)
+    go sock = loop
+      where
+        {-# NOINLINE loop #-}
+        loop = do (csock, _) <- accept sock
+                  forkIOWithUnmask (\r -> r (echo csock) `E.finally` sClose csock)
+                  loop
 
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV]}
 
@@ -54,6 +56,7 @@ eatExceptions m = void m `E.catch` \(_ :: E.SomeException) -> return ()
 echo :: Socket -> IO ()
 echo sock = eatExceptions loop
   where
+    {-# NOINLINE loop #-}
     loop = do
         line <- N.recv sock 128
         N.sendAll sock line
