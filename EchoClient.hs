@@ -74,7 +74,7 @@ echoClient host port pingFreq count =
                   let addr = addrAddress ainfo
                   connect sock addr
                   incRef count
-                  (is, osB) <- Streams.socketToStreams sock
+                  (is, osB) <- Streams.socketToStreamsWithBufferSize bUFSIZ sock
                   buf <- allocBuffer bUFSIZ
                   os <- Streams.unsafeBuilderStream (return buf) osB
                   loop is os)

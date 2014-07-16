@@ -6,14 +6,15 @@ module Main
 import           Control.Concurrent
 import qualified Control.Exception         as E
 import           Control.Monad             (forever)
-import           Data.ByteString           (hGetLine)
-import           Data.ByteString.Char8     (hPutStrLn)
+import           Data.ByteString           (ByteString)
 import           Network                   (withSocketsDo)
 import           Network.Socket
 import qualified Network.Socket.ByteString as N
 import           System.Exit
 import           System.IO                 (BufferMode (LineBuffering), Handle,
                                             hClose, hSetBuffering)
+import           System.IO.Streams         (InputStream, OutputStream)
+import qualified System.IO.Streams         as Streams
 import           Text.Printf               (printf)
 
 port :: Int
@@ -38,17 +39,16 @@ main = withSocketsDo $ do
                       printf "Listening on port %d\n" port
                       let loop = do
                                     (csock, _) <- accept sock
-                                    forkIOWithUnmask (\r -> r (echo csock) `E.finally` sClose csock)
+                                    (is, os) <- Streams.socketToStreamsWithBufferSize 128 csock
+                                    forkIOWithUnmask (\r -> r (echo is os) `E.finally` sClose csock)
                                     loop
                       loop)
 
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV]}
 
 
-echo :: Socket -> IO ()
-echo sock = loop
+echo :: InputStream ByteString -> OutputStream ByteString -> IO ()
+echo is os = loop
   where
-    loop = do
-        line <- N.recv sock 128
-        N.sendAll sock line
-        loop
+    loop = Streams.read is >>=
+           maybe (return ()) (\ping -> Streams.write (Just ping) os >> loop)
