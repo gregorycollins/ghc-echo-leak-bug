@@ -6,15 +6,22 @@ module Main
       main
     ) where
 
+import           Blaze.ByteString.Builder
+import           Blaze.ByteString.Builder.Char8
+import           Blaze.ByteString.Builder.Internal.Buffer (allocBuffer)
 import           Control.Concurrent
-import qualified Control.Exception         as E
-import           Control.Monad             (replicateM, void)
-import           Data.ByteString.Char8     ()
-import           Data.IORef                (IORef, atomicModifyIORef, newIORef,
-                                            readIORef)
+import qualified Control.Exception                        as E
+import           Control.Monad                            (replicateM, void)
+import           Data.ByteString.Char8                    ()
+import           Data.IORef                               (IORef,
+                                                           atomicModifyIORef,
+                                                           newIORef, readIORef)
+import           Data.Monoid                              ((<>))
 import           Network.Socket
-import qualified Network.Socket.ByteString as N
-import           System.Environment        (getArgs)
+import qualified Network.Socket.ByteString                as N
+import           System.Environment                       (getArgs)
+import qualified System.IO.Streams                        as Streams
+import qualified System.IO.Streams.Builder                as Streams
 
 atomicModifyIORef' :: IORef a -> (a -> (a,b)) -> IO b
 atomicModifyIORef' ref f = do
@@ -67,14 +74,19 @@ echoClient host port pingFreq count =
                   let addr = addrAddress ainfo
                   connect sock addr
                   incRef count
-                  loop sock)
+                  (is, osB) <- Streams.socketToStreams sock
+                  buf <- allocBuffer bUFSIZ
+                  os <- Streams.unsafeBuilderStream (return buf) osB
+                  loop is os)
   where
+    bUFSIZ = 128
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICSERV]}
-    loop sock = let go = do N.sendAll sock "PING\n"
-                            _ <- N.recv sock 128
-                            threadDelay (round $ pingFreq*1000000)
-                            go
-                in go
+    msg = Just (fromByteString "PING\n" <> flush)
+    loop is os = let go = do Streams.write msg os
+                             Streams.read is >>= maybe (return ()) (\x -> do
+                                 threadDelay (round $ pingFreq*1000000)
+                                 go)
+                 in go
 
 
 watcher :: IORef Int -> IO ()

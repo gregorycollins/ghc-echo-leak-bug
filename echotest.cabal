@@ -16,7 +16,9 @@ executable echoserver
   build-depends:
       base                  >= 4.5      && <4.8
     , bytestring            >= 0.9
-    , network               >= 2.4
+    , network               >= 2.5
+    , io-streams            >= 1.1 && <1.2
+    , blaze-builder         >= 0.3.3 && <0.4
   ghc-options: -O2 -Wall -threaded -rtsopts
 
 executable echoclient
@@ -27,4 +29,6 @@ executable echoclient
       base                  >= 4.5      && <4.8
     , bytestring            >= 0.9
     , network               >= 2.4
+    , io-streams            >= 1.1 && <1.2
+    , blaze-builder         >= 0.3.3 && <0.4
   ghc-options: -Wall -threaded -rtsopts
