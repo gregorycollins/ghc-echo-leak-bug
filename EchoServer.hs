@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main
     (
       main
@@ -5,7 +7,7 @@ module Main
 
 import           Control.Concurrent
 import qualified Control.Exception         as E
-import           Control.Monad             (forever)
+import           Control.Monad             (forever, void)
 import           Data.ByteString           (hGetLine)
 import           Data.ByteString.Char8     (hPutStrLn)
 import           Network                   (withSocketsDo)
@@ -45,8 +47,12 @@ main = withSocketsDo $ do
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV]}
 
 
+eatExceptions :: IO a -> IO ()
+eatExceptions m = void m `E.catch` \(_ :: E.SomeException) -> return ()
+
+
 echo :: Socket -> IO ()
-echo sock = loop
+echo sock = eatExceptions loop
   where
     loop = do
         line <- N.recv sock 128
