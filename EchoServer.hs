@@ -39,12 +39,15 @@ main = withSocketsDo $ do
                       bind sock addr
                       listen sock 2048
                       printf "Listening on port %d\n" port
-                      let loop = do
-                                    (csock, _) <- accept sock
-                                    (is, os) <- Streams.socketToStreamsWithBufferSize 128 csock
-                                    forkIOWithUnmask (\r -> r (echo is os) `E.finally` sClose csock)
-                                    loop
-                      loop)
+                      go sock)
+
+    go sock = loop
+      where
+        {-# NOINLINE loop #-}
+        loop = do (csock, _) <- accept sock
+                  (is, os) <- Streams.socketToStreamsWithBufferSize 128 csock
+                  forkIOWithUnmask (\r -> r (echo is os) `E.finally` sClose csock)
+                  loop
 
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV]}
 
@@ -56,5 +59,6 @@ eatExceptions m = void m `E.catch` \(_ :: E.SomeException) -> return ()
 echo :: InputStream ByteString -> OutputStream ByteString -> IO ()
 echo is os = eatExceptions loop
   where
+    {-# NOINLINE loop #-}
     loop = Streams.read is >>=
            maybe (return ()) (\ping -> Streams.write (Just ping) os >> loop)

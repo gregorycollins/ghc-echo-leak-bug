@@ -81,21 +81,26 @@ echoClient host port pingFreq count =
                   (is, osB) <- Streams.socketToStreamsWithBufferSize bUFSIZ sock
                   buf <- allocBuffer bUFSIZ
                   os <- Streams.unsafeBuilderStream (return buf) osB
-                  loop is os)
+                  go is os)
   where
     bUFSIZ = 128
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICSERV]}
+
     msg = Just (fromByteString "PING\n" <> flush)
-    loop is os = let go = do Streams.write msg os
-                             Streams.read is >>= maybe (return ()) (\x -> do
-                                 threadDelay (round $ pingFreq*1000000)
-                                 go)
-                 in go
+    {-# NOINLINE go #-}
+    go is os = loop
+      where
+        {-# NOINLINE loop #-}
+        loop = do Streams.write msg os
+                  Streams.read is >>= maybe (return ()) (\x -> do
+                      threadDelay (round $ pingFreq*1000000)
+                      loop)
 
 
 watcher :: IORef Int -> IO ()
 watcher i = go
   where
+    {-# NOINLINE go #-}
     go = do
         count <- readIORef i
         putStrLn $ "Clients Connected: " ++ (show count)
