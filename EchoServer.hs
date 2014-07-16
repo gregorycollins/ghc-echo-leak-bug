@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main
     (
       main
@@ -5,7 +7,7 @@ module Main
 
 import           Control.Concurrent
 import qualified Control.Exception         as E
-import           Control.Monad             (forever)
+import           Control.Monad             (forever, void)
 import           Data.ByteString           (ByteString)
 import           Network                   (withSocketsDo)
 import           Network.Socket
@@ -47,8 +49,12 @@ main = withSocketsDo $ do
     hints = Just $ defaultHints {addrFlags = [AI_NUMERICHOST, AI_NUMERICSERV]}
 
 
+eatExceptions :: IO a -> IO ()
+eatExceptions m = void m `E.catch` \(_ :: E.SomeException) -> return ()
+
+
 echo :: InputStream ByteString -> OutputStream ByteString -> IO ()
-echo is os = loop
+echo is os = eatExceptions loop
   where
     loop = Streams.read is >>=
            maybe (return ()) (\ping -> Streams.write (Just ping) os >> loop)

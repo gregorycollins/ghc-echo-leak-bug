@@ -53,22 +53,26 @@ main = do
 
         spawnClient = E.mask_ $ do
             mv <- newEmptyMVar
-            tid <- forkIOWithUnmask (\rest -> rest (echoClient ip port pingFreq countRef) `E.finally` putMVar mv ())
+            tid <- forkIOWithUnmask $ \rest ->
+                     rest (eatExceptions $ echoClient ip port pingFreq countRef)
+                       `E.finally` putMVar mv ()
             return (tid, mv)
 
         killClient = eatExceptions . killThread . fst
 
         waitClient = readMVar . snd
 
-        eatExceptions m = m `E.catch` \(_ :: E.SomeException) -> return ()
+
+eatExceptions :: IO a -> IO ()
+eatExceptions m = void m `E.catch` \(_ :: E.SomeException) -> return ()
 
 
 echoClient :: String -> Int -> Float -> IORef Int -> IO ()
 echoClient host port pingFreq count =
     E.bracket (socket AF_INET Stream defaultProtocol)
-              (\sock -> do shutdown sock ShutdownBoth
-                           sClose sock
-                           decRef count)
+              (\sock -> E.mask_ $ do eatExceptions $ shutdown sock ShutdownBoth
+                                     eatExceptions $ sClose sock
+                                     decRef count)
               (\sock -> do
                   (ainfo:_) <- getAddrInfo hints (Just host) (Just $ show port)
                   let addr = addrAddress ainfo
